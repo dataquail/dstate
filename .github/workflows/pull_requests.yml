@@ -1,0 +1,7 @@
+name: Code Quality
+on: pull_request
+jobs:
+  code_quality:
+    uses: ./.github/workflows/fast_checks.yml
+  e2e:
+    uses: ./.github/workflows/e2e_tests.yml
