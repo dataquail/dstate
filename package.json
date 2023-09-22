@@ -20,7 +20,8 @@
     "prcheck": "npm run precommit && npm run test:e2e"
   },
   "dependencies": {
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "zod": "^3.22.2"
   },
   "devDependencies": {
     "@types/jest": "^29.5.2",
