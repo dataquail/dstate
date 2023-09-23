@@ -18,16 +18,15 @@ const testHarness = () => {
   };
   const counterModel = createModel({
     manifest: {
-      states: [
-        { name: 'zero', schema: z.object({ count: z.literal(0) }) },
-        { name: 'positive', schema: z.object({ count: z.literal(1) }) },
-        { name: 'negative', schema: z.object({ count: z.literal(-1) }) },
-        { name: 'unknown', schema: z.object({ count: z.number() }) },
-      ],
-      events: [
-        { name: 'ADD_ONE', schema: {} },
-        { name: 'MINUS_ONE', schema: {} },
-      ],
+      states: {
+        zero: z.object({ count: z.literal(0) }),
+        positive: z.object({ count: z.literal(1) }),
+        negative: z.object({ count: z.literal(-1) }),
+      },
+      events: {
+        ADD_ONE: {},
+        MINUS_ONE: {},
+      },
     },
     stateMap: {
       zero: {
@@ -84,6 +83,7 @@ describe('createModel', () => {
 
   it('goes to unknown variant if unrecognized state', () => {
     const counterModel = testHarness();
+    // TODO: passing 'test' should result in a type error
     const zeroCounter = counterModel.asState('test', { count: 0 });
     expect(zeroCounter.getData()).toStrictEqual({ count: 0 });
     expect(zeroCounter.getState()).toBe('unknown');
@@ -108,7 +108,8 @@ describe('createModel', () => {
     const counterModel = testHarness();
     const positiveCounter = counterModel.asState('positive', { count: 1 });
     expect(positiveCounter.getState()).toBe('positive');
-    const unknownCounter = positiveCounter.send('ADD_ONE');
+    // const unknownCounter = positiveCounter.send('ADD_ONE'); // <-- unexpected event
+    const unknownCounter = positiveCounter.send('ADD_ONE' as any);
     expect(unknownCounter.getData()).toStrictEqual({ count: 1 });
     expect(unknownCounter.getState()).toBe('unknown');
   });
