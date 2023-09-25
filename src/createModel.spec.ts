@@ -33,25 +33,27 @@ const testHarness = () => {
         ADD_ONE: {
           invoke: addOne,
           onResult: [
-            { cond: isError, target: 'unknown' as const },
-            { target: 'positive' as const },
+            { cond: isError, target: 'unknown' },
+            { target: 'positive' },
           ],
         },
         MINUS_ONE: {
           invoke: minusOne,
           onResult: [
-            { cond: isError, target: 'unknown' as const },
-            { target: 'negative' as const },
+            { cond: isError, target: 'unknown' },
+            { target: 'negative' },
           ],
         },
+        // TODO: Should result in type error
+        // FAKE_EVENT: {
+        //   invoke: minusOne,
+        //   onResult: [{ cond: isError, target: 'unknown' }, { target: 'zero' }],
+        // },
       },
       positive: {
         MINUS_ONE: {
           invoke: minusOne,
-          onResult: [
-            { cond: isError, target: 'unknown' as const },
-            { target: 'zero' as const },
-          ],
+          onResult: [{ cond: isError, target: 'unknown' }, { target: 'zero' }],
         },
       },
       negative: {
@@ -83,17 +85,16 @@ describe('createModel', () => {
 
   it('goes to unknown variant if unrecognized state', () => {
     const counterModel = testHarness();
-    // TODO: passing 'test' should result in a type error
-    const zeroCounter = counterModel.asState('test', { count: 0 });
-    expect(zeroCounter.getData()).toStrictEqual({ count: 0 });
-    expect(zeroCounter.getState()).toBe('unknown');
+    // const zeroCounter = counterModel.asState('test', { count: 0 }); // <-- unrecognized state
+    const testThrow = () => counterModel.asState('test' as any, { count: 0 });
+    expect(testThrow).toThrow('Unable to instantiate unrecognized state: test');
   });
 
   it('goes to unknown variant if invalid data', () => {
     const counterModel = testHarness();
-    const zeroCounter = counterModel.asState('zero', { count: 1 });
-    expect(zeroCounter.getData()).toStrictEqual({ count: 1 });
-    expect(zeroCounter.getState()).toBe('unknown');
+    // const zeroCounter = counterModel.asState('zero', { count: 1 }); // <-- invalid data
+    const testThrow = () => counterModel.asState('zero', { count: 1 as any });
+    expect(testThrow).toThrow('Invalid data for provided state');
   });
 
   it('goes to positive variant', () => {

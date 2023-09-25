@@ -1,65 +1,49 @@
 import { ZodObject, ZodRawShape } from 'zod';
 
-type Config<
-  TStateName extends string,
-  TEventName extends string,
-  TZodObject extends ZodRawShape,
-> = {
-  manifest: Manifest<TStateName, TEventName, TZodObject>;
-  stateMap: {
-    [key in TStateName]: {
-      [key in TEventName]: {
-        invoke: (data: any) => any;
-        onResult: {
-          cond?: (data: any, error: Error) => boolean;
-          target: TStateName;
-        }[];
+export const createModel = <
+  TStateSchema extends ZodRawShape,
+  TConfig extends {
+    manifest: {
+      states: {
+        [k in keyof TConfig['manifest']['states']]: ZodObject<TStateSchema>;
+      };
+      events: {
+        [k in keyof TConfig['manifest']['events']]: any;
       };
     };
-  };
-};
-
-type Manifest<
-  TStateName extends string,
-  TEventName extends string,
-  TZodObject extends ZodRawShape,
-> = {
-  states: {
-    [key in TStateName]: ZodObject<TZodObject>;
-  };
-  events: {
-    [key in TEventName]: any;
-  };
-};
-
-export const createModel = <
-  TStateName extends string,
-  TEventName extends string,
-  TZodObject extends ZodRawShape,
-  TConfig extends Config<TStateName, TEventName, TZodObject>,
+    stateMap: {
+      [k in keyof TConfig['manifest']['states']]: {
+        [k in keyof TConfig['manifest']['events']]?: {
+          invoke: (data: any) => any;
+          onResult: {
+            cond?: (data: any, error: Error) => boolean;
+            target: keyof TConfig['manifest']['states'] | 'unknown';
+          }[];
+        };
+      };
+    };
+  },
 >(
   config: TConfig,
 ) => {
-  // type States = keyof TConfig['manifest']['states'] | 'unknown';
-  // type Events = keyof TConfig['manifest']['events'];
+  type States = keyof TConfig['manifest']['states'];
 
   return {
-    asState: <TState extends TStateName>(
-      state: TState,
-      data: TConfig['manifest']['states'][TStateName],
+    asState: <TStateName extends States>(
+      targetState: TStateName,
+      data: ReturnType<TConfig['manifest']['states'][TStateName]['parse']>,
     ) => {
-      let currentState = state;
+      let currentState = targetState;
       let currentData = data;
 
-      if (!config.manifest.states[state as unknown as TStateName]) {
-        // State not recognized
-        currentState = 'unknown' as any;
+      if (!config.manifest.states[targetState]) {
+        throw new Error(
+          `Unable to instantiate unrecognized state: ${String(targetState)}`,
+        );
       } else if (
-        config.manifest.states[state as unknown as TStateName].safeParse(data)
-          .success === false
+        config.manifest.states[currentState].safeParse(data).success === false
       ) {
-        // Invalid data for provided state
-        currentState = 'unknown' as any;
+        throw new Error('Invalid data for provided state');
       }
 
       const model = {
@@ -68,14 +52,10 @@ export const createModel = <
         // TODO: clone currentState
         getState: () => currentState,
         send: (event: keyof TConfig['stateMap'][typeof currentState]) => {
-          if (!config.stateMap[currentState]) {
-            return model;
-          }
-
-          const eventMap =
-            config.stateMap[currentState as unknown as TStateName][
-              event as unknown as TEventName
-            ];
+          const currentStateMap = config.stateMap[
+            currentState
+          ] as TConfig['stateMap'][TStateName];
+          const eventMap = currentStateMap[event];
           if (!eventMap) {
             // Event not recognized
             currentState = 'unknown' as any;
@@ -99,6 +79,7 @@ export const createModel = <
 
           if (
             newState &&
+            newState !== 'unknown' &&
             config.manifest.states[newState].safeParse(newData).success !==
               false
           ) {
