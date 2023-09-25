@@ -58,8 +58,11 @@ export const createModel = <
           const eventMap = currentStateMap[event];
           if (!eventMap) {
             // Event not recognized
-            currentState = 'unknown' as any;
-            return model;
+            throw new Error(
+              `Unrecognized event: ${String(event)} for state: ${String(
+                currentState,
+              )}`,
+            );
           }
 
           let newData: any;

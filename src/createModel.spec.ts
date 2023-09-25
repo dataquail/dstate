@@ -83,18 +83,29 @@ describe('createModel', () => {
     expect(zeroCounter.getState()).toBe('zero');
   });
 
-  it('goes to unknown variant if unrecognized state', () => {
+  it('throws error when instantiating invalid state', () => {
     const counterModel = testHarness();
     // const zeroCounter = counterModel.asState('test', { count: 0 }); // <-- unrecognized state
     const testThrow = () => counterModel.asState('test' as any, { count: 0 });
     expect(testThrow).toThrow('Unable to instantiate unrecognized state: test');
   });
 
-  it('goes to unknown variant if invalid data', () => {
+  it('tnrows error when instantiating with invalid data', () => {
     const counterModel = testHarness();
     // const zeroCounter = counterModel.asState('zero', { count: 1 }); // <-- invalid data
     const testThrow = () => counterModel.asState('zero', { count: 1 as any });
     expect(testThrow).toThrow('Invalid data for provided state');
+  });
+
+  it('throws error when it receives unexpected even', () => {
+    const counterModel = testHarness();
+    const positiveCounter = counterModel.asState('positive', { count: 1 });
+    expect(positiveCounter.getState()).toBe('positive');
+    // const unknownCounter = positiveCounter.send('ADD_ONE'); // <-- unexpected event
+    const testThrow = () => positiveCounter.send('ADD_ONE' as any);
+    expect(testThrow).toThrow(
+      'Unrecognized event: ADD_ONE for state: positive',
+    );
   });
 
   it('goes to positive variant', () => {
@@ -103,15 +114,5 @@ describe('createModel', () => {
     const positiveCounter = zeroCounter.send('ADD_ONE');
     expect(positiveCounter.getData()).toStrictEqual({ count: 1 });
     expect(positiveCounter.getState()).toBe('positive');
-  });
-
-  it('goes to unknown variant on unexpedted event', () => {
-    const counterModel = testHarness();
-    const positiveCounter = counterModel.asState('positive', { count: 1 });
-    expect(positiveCounter.getState()).toBe('positive');
-    // const unknownCounter = positiveCounter.send('ADD_ONE'); // <-- unexpected event
-    const unknownCounter = positiveCounter.send('ADD_ONE' as any);
-    expect(unknownCounter.getData()).toStrictEqual({ count: 1 });
-    expect(unknownCounter.getState()).toBe('unknown');
   });
 });
