@@ -3,19 +3,17 @@ import { z } from 'zod';
 import { createModel } from 'src/createModel';
 
 const testHarness = () => {
-  const addOne = (data: any) => {
+  const addOne = (data: { count: 0 | -1 }) => {
     return {
-      count: data.count + 1,
+      count: (data.count + 1) as 1 | 0,
     };
   };
-  const minusOne = (data: any) => {
+  const minusOne = (data: { count: 0 | 1 }) => {
     return {
-      count: data.count - 1,
+      count: (data.count - 1) as -1 | 0,
     };
   };
-  const isError = (_data: any, error: Error) => {
-    return !!error;
-  };
+
   const counterModel = createModel({
     manifest: {
       variants: {
@@ -32,34 +30,23 @@ const testHarness = () => {
       zero: {
         ADD_ONE: {
           invoke: addOne,
-          onResult: [
-            { cond: isError, target: 'unknown' },
-            { target: 'positive' },
-          ],
+          onResult: [{ target: 'positive' }],
         },
         MINUS_ONE: {
           invoke: minusOne,
-          onResult: [
-            { cond: isError, target: 'unknown' },
-            { target: 'negative' },
-          ],
+          onResult: [{ target: 'negative' }],
         },
-        // TODO: Should result in type error
-        // FAKE_EVENT: {
-        //   invoke: minusOne,
-        //   onResult: [{ cond: isError, target: 'unknown' }, { target: 'zero' }],
-        // },
       },
       positive: {
         MINUS_ONE: {
           invoke: minusOne,
-          onResult: [{ cond: isError, target: 'unknown' }, { target: 'zero' }],
+          onResult: [{ target: 'zero' }],
         },
       },
       negative: {
         ADD_ONE: {
           invoke: addOne,
-          onResult: [{ cond: isError, target: 'unknown' }, { target: 'zero' }],
+          onResult: [{ target: 'zero' }],
         },
       },
     },
