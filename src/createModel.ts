@@ -1,23 +1,23 @@
 import { ZodObject, ZodRawShape } from 'zod';
 
 export const createModel = <
-  TStateSchema extends ZodRawShape,
+  TVariantSchema extends ZodRawShape,
   TConfig extends {
     manifest: {
-      states: {
-        [k in keyof TConfig['manifest']['states']]: ZodObject<TStateSchema>;
+      variants: {
+        [k in keyof TConfig['manifest']['variants']]: ZodObject<TVariantSchema>;
       };
       events: {
         [k in keyof TConfig['manifest']['events']]: any;
       };
     };
-    stateMap: {
-      [k in keyof TConfig['manifest']['states']]: {
+    variantMap: {
+      [k in keyof TConfig['manifest']['variants']]: {
         [k in keyof TConfig['manifest']['events']]?: {
           invoke: (data: any) => any;
           onResult: {
             cond?: (data: any, error: Error) => boolean;
-            target: keyof TConfig['manifest']['states'] | 'unknown';
+            target: keyof TConfig['manifest']['variants'] | 'unknown';
           }[];
         };
       };
@@ -26,41 +26,44 @@ export const createModel = <
 >(
   config: TConfig,
 ) => {
-  type States = keyof TConfig['manifest']['states'];
+  type Variants = keyof TConfig['manifest']['variants'];
 
   return {
-    asState: <TStateName extends States>(
-      targetState: TStateName,
-      data: ReturnType<TConfig['manifest']['states'][TStateName]['parse']>,
+    asVariant: <TStateName extends Variants>(
+      targetVariant: TStateName,
+      data: ReturnType<TConfig['manifest']['variants'][TStateName]['parse']>,
     ) => {
-      let currentState = targetState;
+      let currentVariant = targetVariant;
       let currentData = data;
 
-      if (!config.manifest.states[targetState]) {
+      if (!config.manifest.variants[targetVariant]) {
         throw new Error(
-          `Unable to instantiate unrecognized state: ${String(targetState)}`,
+          `Unable to instantiate unrecognized variant: ${String(
+            targetVariant,
+          )}`,
         );
       } else if (
-        config.manifest.states[currentState].safeParse(data).success === false
+        config.manifest.variants[currentVariant].safeParse(data).success ===
+        false
       ) {
-        throw new Error('Invalid data for provided state');
+        throw new Error('Invalid data for provided variant');
       }
 
       const model = {
         // TODO: clone currentData
-        getData: () => currentData,
-        // TODO: clone currentState
-        getState: () => currentState,
-        send: (event: keyof TConfig['stateMap'][typeof currentState]) => {
-          const currentStateMap = config.stateMap[
-            currentState
-          ] as TConfig['stateMap'][TStateName];
-          const eventMap = currentStateMap[event];
+        getVariantData: () => currentData,
+        // TODO: clone currentVariant
+        getVariantName: () => currentVariant,
+        send: (event: keyof TConfig['variantMap'][typeof currentVariant]) => {
+          const currentVariantMap = config.variantMap[
+            currentVariant
+          ] as TConfig['variantMap'][TStateName];
+          const eventMap = currentVariantMap[event];
           if (!eventMap) {
             // Event not recognized
             throw new Error(
-              `Unrecognized event: ${String(event)} for state: ${String(
-                currentState,
+              `Unrecognized event: ${String(event)} for variant: ${String(
+                currentVariant,
               )}`,
             );
           }
@@ -73,7 +76,7 @@ export const createModel = <
             newError = error;
           }
 
-          const newState = eventMap.onResult.find((result) => {
+          const newVariant = eventMap.onResult.find((result) => {
             if (result.cond) {
               return result.cond(newData, newError);
             }
@@ -81,15 +84,15 @@ export const createModel = <
           })?.target;
 
           if (
-            newState &&
-            newState !== 'unknown' &&
-            config.manifest.states[newState].safeParse(newData).success !==
+            newVariant &&
+            newVariant !== 'unknown' &&
+            config.manifest.variants[newVariant].safeParse(newData).success !==
               false
           ) {
-            currentState = newState as any;
+            currentVariant = newVariant as any;
           } else {
             // Resultant data is invalid for new state
-            currentState = 'unknown' as any;
+            currentVariant = 'unknown' as any;
           }
           currentData = newData;
 
