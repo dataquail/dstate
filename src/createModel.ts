@@ -3,32 +3,41 @@ import { ZodObject, ZodRawShape } from 'zod';
 import {
   DomainInvariantViolationError,
   UnexpectedError,
-  isDomainInvariantViolation,
   isError,
-  isUnexpectedError,
 } from 'src/errors';
 
+export type Event<TType, TArgs> = { type: TType; args: TArgs };
+
+type UnexpectedErrorKind = {
+  variantName: 'unknown';
+  variantData: UnexpectedError;
+};
+
+type DomainInvariantViolationErrorKind = {
+  variantName: 'unknown';
+  variantData: DomainInvariantViolationError;
+};
+
 export const createModel = <
+  TEvents extends Event<string, any>,
   TVariantSchema extends ZodRawShape,
   TConfig extends {
     manifest: {
       variants: {
         [k in keyof TConfig['manifest']['variants']]: ZodObject<TVariantSchema>;
       };
-      events: {
-        [k in keyof TConfig['manifest']['events']]: any;
-      };
+      eventSchema: TEvents;
     };
     variantMap: {
       [variant in keyof TConfig['manifest']['variants']]: {
-        [e in keyof TConfig['manifest']['events']]?: {
+        [e in TEvents['type']]: {
           invoke: (
             currentData: ReturnType<
               TConfig['manifest']['variants'][variant]['parse']
             >,
           ) => any;
           onResult: {
-            cond?: (data: any, error: Error) => boolean;
+            cond?: (data: any) => boolean;
             target: keyof TConfig['manifest']['variants'];
           }[];
         };
@@ -45,108 +54,116 @@ export const createModel = <
         TConfig['manifest']['variants'][TVariantNames]['parse']
       >,
     >(
-      targetVariant: TVariantNames,
+      variant: TVariantNames,
       data: TInputData,
-    ) => {
-      let currentVariant: TVariantNames | 'unknown' = targetVariant;
-      let currentData:
-        | TInputData
-        | UnexpectedError
-        | DomainInvariantViolationError = data;
-
-      if (!config.manifest.variants[targetVariant]) {
+    ): {
+      variantName: typeof variant;
+      variantData: ReturnType<
+        TConfig['manifest']['variants'][typeof variant]['parse']
+      >;
+      send: (event: keyof TConfig['variantMap'][typeof variant]) =>
+        | UnexpectedErrorKind
+        | DomainInvariantViolationErrorKind
+        | {
+            variantName: TConfig['variantMap'][typeof variant][keyof TConfig['variantMap'][typeof variant]]['onResult'][number]['target'];
+            variantData: ReturnType<
+              TConfig['manifest']['variants'][TConfig['variantMap'][typeof variant][keyof TConfig['variantMap'][typeof variant]]['onResult'][number]['target']]['parse']
+            >;
+            send: (
+              e: keyof TConfig['variantMap'][typeof variant],
+            ) =>
+              | UnexpectedErrorKind
+              | DomainInvariantViolationErrorKind
+              | unknown;
+          };
+    } => {
+      if (!config.manifest.variants[variant]) {
         throw new Error(
-          `Unable to instantiate unrecognized variant: ${String(
-            targetVariant,
-          )}`,
+          `Unable to instantiate unrecognized variant: ${String(variant)}`,
         );
       } else if (
-        config.manifest.variants[currentVariant].safeParse(data).success ===
-        false
+        config.manifest.variants[variant].safeParse(data).success === false
       ) {
-        throw new Error('Invalid data for provided variant');
+        throw new Error(
+          `Unable to instantiate variant: ${String(
+            variant,
+          )} due to invalid initial data`,
+        );
       }
 
-      const model = {
-        // TODO: clone currentData
-        getVariantData: () => currentData,
-        // TODO: clone currentVariant
-        getVariantName: () => currentVariant,
-        send: <TEvent extends keyof TConfig['variantMap'][TVariantNames]>(
-          event: TEvent,
-        ) => {
-          if (
-            currentVariant === 'unknown' ||
-            isUnexpectedError(currentData) ||
-            isDomainInvariantViolation(currentData)
-          ) {
-            throw new Error('Cannot send events to unknown variant');
-          }
+      const send = (event: keyof TConfig['variantMap'][typeof variant]) => {
+        const currentVariantMap = config.variantMap[
+          variant
+        ] as TConfig['variantMap'][TVariantNames];
 
-          const currentVariantMap = config.variantMap[
-            currentVariant
-          ] as TConfig['variantMap'][TVariantNames];
+        const eventMap = currentVariantMap[event];
+        if (!eventMap) {
+          throw new Error(
+            `Unrecognized event: ${String(event)} for variant: ${String(
+              variant,
+            )}`,
+          );
+        }
 
-          const eventMap = currentVariantMap[event];
-          if (!eventMap) {
-            throw new Error(
-              `Unrecognized event: ${String(event)} for variant: ${String(
-                currentVariant,
-              )}`,
-            );
-          }
-
-          // let newData: ReturnType<
-          //   TConfig['variantMap'][TVariantName][TEvent]['invoke']
-          // >;
-          let newData: any;
-          let newError: any;
-          try {
-            newData = eventMap.invoke(currentData);
-          } catch (error) {
-            if (isError(error)) {
-              currentData = new UnexpectedError(error.message);
-            } else {
-              currentData = new UnexpectedError(String(error));
-            }
-            currentVariant = 'unknown';
-            return model;
-          }
-
-          const newTargetVariant = eventMap.onResult.find((result) => {
+        try {
+          const newData = eventMap.invoke(data);
+          const newVariant = eventMap.onResult.find((result) => {
             if (result.cond) {
-              return result.cond(newData, newError);
+              return result.cond(newData);
             }
             return true;
           })?.target;
 
-          if (!newTargetVariant) {
-            // No target variant found - noop
-            return model;
+          if (!newVariant) {
+            throw new Error(
+              `Event: ${String(
+                event,
+              )} unable to transition to a new target variant`,
+            );
           }
 
           if (
-            newTargetVariant !== 'unknown' &&
-            config.manifest.variants[newTargetVariant].safeParse(newData)
-              .success !== false
+            newVariant !== 'unknown' &&
+            config.manifest.variants[newVariant].safeParse(newData).success !==
+              false
           ) {
-            currentVariant = newTargetVariant as TVariantNames | 'unknown';
-            currentData = newData;
+            return {
+              variantData: newData as ReturnType<
+                (typeof config)['manifest']['variants'][(typeof config)['variantMap'][typeof variant][typeof event]['onResult'][number]['target']]['parse']
+              >,
+              // variantName:
+              //   newVariant as (typeof config)['variantMap'][typeof variant][typeof event]['onResult'][number]['target'],
+              variantName: newVariant as any,
+              send,
+            };
           } else {
-            // Resultant data is invalid for new state
-            currentData = new DomainInvariantViolationError(
-              `Resulting data invalid for new variant: ${String(
-                newTargetVariant,
-              )}`,
-            );
-            currentVariant = 'unknown';
-            return model;
+            return {
+              variantData: new DomainInvariantViolationError(
+                `Resulting data invalid for new variant: ${String(newVariant)}`,
+              ),
+              variantName: 'unknown',
+            };
           }
-
-          return model;
-        },
+        } catch (error) {
+          if (isError(error)) {
+            return {
+              variantData: new UnexpectedError(error.message),
+              variantName: 'unknown',
+            };
+          } else {
+            return {
+              variantData: new UnexpectedError(String(error)),
+              variantName: 'unknown',
+            };
+          }
+        }
       };
-      return model;
+
+      return {
+        variantName: variant,
+        variantData: data,
+        send: send as any,
+      };
     },
   };
 };
