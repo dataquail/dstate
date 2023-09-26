@@ -37,7 +37,11 @@ export const createModel = <
             >,
           ) => any;
           onResult: {
-            cond?: (data: any) => boolean;
+            cond?: (
+              data: ReturnType<
+                TConfig['manifest']['variants'][variant]['parse']
+              >,
+            ) => boolean;
             target: keyof TConfig['manifest']['variants'];
           }[];
         };
@@ -49,28 +53,30 @@ export const createModel = <
 ) => {
   return {
     asVariant: <
-      TVariantNames extends keyof TConfig['manifest']['variants'],
+      TVariant extends keyof TConfig['manifest']['variants'],
       TInputData extends ReturnType<
-        TConfig['manifest']['variants'][TVariantNames]['parse']
+        TConfig['manifest']['variants'][TVariant]['parse']
       >,
     >(
-      variant: TVariantNames,
+      variant: TVariant,
       data: TInputData,
     ): {
-      variantName: typeof variant;
+      variantName: TVariant;
       variantData: ReturnType<
-        TConfig['manifest']['variants'][typeof variant]['parse']
+        TConfig['manifest']['variants'][TVariant]['parse']
       >;
-      send: (event: keyof TConfig['variantMap'][typeof variant]) =>
+      send: <TEvent extends keyof TConfig['variantMap'][TVariant]>(
+        event: TEvent,
+      ) =>
         | UnexpectedErrorKind
         | DomainInvariantViolationErrorKind
         | {
-            variantName: TConfig['variantMap'][typeof variant][keyof TConfig['variantMap'][typeof variant]]['onResult'][number]['target'];
+            variantName: TConfig['variantMap'][TVariant][TEvent]['onResult'][number]['target'];
             variantData: ReturnType<
-              TConfig['manifest']['variants'][TConfig['variantMap'][typeof variant][keyof TConfig['variantMap'][typeof variant]]['onResult'][number]['target']]['parse']
+              TConfig['manifest']['variants'][TConfig['variantMap'][TVariant][TEvent]['onResult'][number]['target']]['parse']
             >;
             send: (
-              e: keyof TConfig['variantMap'][typeof variant],
+              e: keyof TConfig['variantMap'][TConfig['variantMap'][TVariant][TEvent]['onResult'][number]['target']],
             ) =>
               | UnexpectedErrorKind
               | DomainInvariantViolationErrorKind
@@ -91,10 +97,12 @@ export const createModel = <
         );
       }
 
-      const send = (event: keyof TConfig['variantMap'][typeof variant]) => {
+      const send = <TEvent extends keyof TConfig['variantMap'][typeof variant]>(
+        event: TEvent,
+      ) => {
         const currentVariantMap = config.variantMap[
           variant
-        ] as TConfig['variantMap'][TVariantNames];
+        ] as TConfig['variantMap'][TVariant];
 
         const eventMap = currentVariantMap[event];
         if (!eventMap) {
@@ -129,11 +137,10 @@ export const createModel = <
           ) {
             return {
               variantData: newData as ReturnType<
-                (typeof config)['manifest']['variants'][(typeof config)['variantMap'][typeof variant][typeof event]['onResult'][number]['target']]['parse']
+                TConfig['manifest']['variants'][TConfig['variantMap'][TVariant][TEvent]['onResult'][number]['target']]['parse']
               >,
-              // variantName:
-              //   newVariant as (typeof config)['variantMap'][typeof variant][typeof event]['onResult'][number]['target'],
-              variantName: newVariant as any,
+              variantName:
+                newVariant as TConfig['variantMap'][TVariant][TEvent]['onResult'][number]['target'],
               send,
             };
           } else {
@@ -141,19 +148,19 @@ export const createModel = <
               variantData: new DomainInvariantViolationError(
                 `Resulting data invalid for new variant: ${String(newVariant)}`,
               ),
-              variantName: 'unknown',
+              variantName: 'unknown' as const,
             };
           }
         } catch (error) {
           if (isError(error)) {
             return {
               variantData: new UnexpectedError(error.message),
-              variantName: 'unknown',
+              variantName: 'unknown' as const,
             };
           } else {
             return {
               variantData: new UnexpectedError(String(error)),
-              variantName: 'unknown',
+              variantName: 'unknown' as const,
             };
           }
         }
@@ -162,7 +169,7 @@ export const createModel = <
       return {
         variantName: variant,
         variantData: data,
-        send: send as any,
+        send,
       };
     },
   };
