@@ -97,15 +97,13 @@ export const createModel = <
         );
       }
 
-      const send = <TEvent extends keyof TConfig['variantMap'][typeof variant]>(
+      const send = <TEvent extends keyof TConfig['variantMap'][TVariant]>(
         event: TEvent,
       ) => {
-        const currentVariantMap = config.variantMap[
-          variant
-        ] as TConfig['variantMap'][TVariant];
+        const variantEventConfig =
+          config.variantMap[variant][event as TEvents['type']];
 
-        const eventMap = currentVariantMap[event];
-        if (!eventMap) {
+        if (!variantEventConfig) {
           throw new Error(
             `Unrecognized event: ${String(event)} for variant: ${String(
               variant,
@@ -114,8 +112,8 @@ export const createModel = <
         }
 
         try {
-          const newData = eventMap.invoke(data);
-          const newVariant = eventMap.onResult.find((result) => {
+          const newData = variantEventConfig.invoke(data);
+          const newVariant = variantEventConfig.onResult.find((result) => {
             if (result.cond) {
               return result.cond(newData);
             }
@@ -132,8 +130,8 @@ export const createModel = <
 
           if (
             newVariant !== 'unknown' &&
-            config.manifest.variants[newVariant].safeParse(newData).success !==
-              false
+            (config.manifest.variants as any)[newVariant].safeParse(newData)
+              .success !== false
           ) {
             return {
               variantData: newData as ReturnType<
