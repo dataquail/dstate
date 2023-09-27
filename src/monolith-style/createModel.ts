@@ -4,7 +4,7 @@ import {
   DomainInvariantViolationError,
   UnexpectedError,
   isError,
-} from 'src/errors';
+} from 'src/monolith-style/errors';
 
 export type Event<TType, TArgs> = { type: TType; args: TArgs };
 

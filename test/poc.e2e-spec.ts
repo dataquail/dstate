@@ -1,4 +1,4 @@
-import { main } from 'src';
+import { main } from 'src/prototypes/poc';
 
 describe('Proof of Concept (e2e)', () => {
   it('passes', () => {

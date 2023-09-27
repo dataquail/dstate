@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { type Event, createModel } from 'src/createModel';
+import { type Event, createModel } from 'src/monolith-style/createModel';
 
 const testHarness = () => {
   const addOne = (data: { count: 0 | -1 }) => {

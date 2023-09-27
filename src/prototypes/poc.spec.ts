@@ -1,4 +1,4 @@
-import { createAggregate } from 'src';
+import { createAggregate } from 'src/prototypes/poc';
 
 describe('Proof of Concept (unit)', () => {
   it('starts at zero', () => {
